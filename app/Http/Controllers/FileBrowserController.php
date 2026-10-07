@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\SftpActivity;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -47,7 +48,9 @@ class FileBrowserController extends Controller
             $breadcrumbs[] = ['name' => $segment, 'path' => $path];
         }
 
-        return response()->view('files', compact('directory', 'directories', 'files', 'breadcrumbs'))
+        $activities = SftpActivity::query()->orderByDesc('occurred_at')->orderByDesc('id')->limit(30)->get();
+
+        return response()->view('files', compact('directory', 'directories', 'files', 'breadcrumbs', 'activities'))
             ->header('Cache-Control', 'no-store');
     }
 

@@ -41,4 +41,8 @@ return [
         'password' => env('SFTP_PASSWORD'),
     ],
 
+    'sftp_webhook' => [
+        'token' => env('SFTP_EVENT_WEBHOOK_TOKEN'),
+    ],
+
 ];

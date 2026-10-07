@@ -1,6 +1,10 @@
 <?php
 
+use App\Models\SftpActivity;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+
+uses(RefreshDatabase::class);
 
 beforeEach(function () {
     config()->set('services.sftp_browser.disk', 'private');
@@ -53,4 +57,19 @@ test('the file browser escapes filenames', function () {
         ->assertOk()
         ->assertSee('file&lt;img src=x&gt;.txt', false)
         ->assertDontSee('<img src=x>', false);
+});
+
+test('the file browser shows recent SFTP activity after a file is deleted', function () {
+    SftpActivity::factory()->create([
+        'action' => 'delete',
+        'path' => '/deleted<script>.txt',
+        'size' => null,
+    ]);
+
+    $this->withBasicAuth('uploader', 'test-password')
+        ->get(route('files.index'))
+        ->assertOk()
+        ->assertSee('Recent SFTP activity')
+        ->assertSee('/deleted&lt;script&gt;.txt', false)
+        ->assertDontSee('/deleted<script>.txt', false);
 });

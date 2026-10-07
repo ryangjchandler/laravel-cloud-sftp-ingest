@@ -30,6 +30,26 @@
                 @endforeach
             </ul>
         @endif
+
+        <section aria-labelledby="sftp-activity-heading">
+            <h2 id="sftp-activity-heading">Recent SFTP activity</h2>
+
+            @if ($activities->isEmpty())
+                <p>No SFTP activity recorded yet.</p>
+            @else
+                <ul>
+                    @foreach ($activities as $activity)
+                        <li>
+                            <time datetime="{{ $activity->occurred_at->toIso8601String() }}">{{ $activity->occurred_at->utc()->format('Y-m-d H:i:s') }} UTC</time>
+                            &mdash; {{ $activity->username }} {{ $activity->action }} {{ $activity->path }}
+                            @if ($activity->target_path)
+                                &rarr; {{ $activity->target_path }}
+                            @endif
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </section>
     </main>
 </body>
 </html>

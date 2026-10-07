@@ -110,6 +110,29 @@ export SFTPGO_SFTPD__HOST_KEYS="$host_key_file"
 export SFTPGO_SFTPD__BINDINGS__0__ADDRESS=127.0.0.1
 export SFTPGO_LOG_FILE_PATH=
 
+if [ -n "${SFTP_EVENT_WEBHOOK_URL:-}${SFTP_EVENT_WEBHOOK_TOKEN:-}" ]; then
+    if [ -z "${SFTP_EVENT_WEBHOOK_URL:-}" ] || [ -z "${SFTP_EVENT_WEBHOOK_TOKEN:-}" ]; then
+        echo 'SFTP_EVENT_WEBHOOK_URL and SFTP_EVENT_WEBHOOK_TOKEN must both be set to enable events.' >&2
+        exit 1
+    fi
+
+    case "$SFTP_EVENT_WEBHOOK_URL" in
+        https://*) ;;
+        *) echo 'SFTP_EVENT_WEBHOOK_URL must be an HTTPS URL.' >&2; exit 1 ;;
+    esac
+
+    export SFTPGO_COMMON__ACTIONS__EXECUTE_ON=upload,delete,rename,mkdir,rmdir
+    export SFTPGO_COMMON__ACTIONS__HOOK="$SFTP_EVENT_WEBHOOK_URL"
+    export SFTPGO_HTTP__HEADERS__0__KEY=Authorization
+    export SFTPGO_HTTP__HEADERS__0__VALUE="Bearer $SFTP_EVENT_WEBHOOK_TOKEN"
+    export SFTPGO_HTTP__HEADERS__0__URL="$SFTP_EVENT_WEBHOOK_URL"
+    export SFTPGO_HTTP__HEADERS__1__KEY=Content-Type
+    export SFTPGO_HTTP__HEADERS__1__VALUE=application/json
+    export SFTPGO_HTTP__HEADERS__1__URL="$SFTP_EVENT_WEBHOOK_URL"
+
+    echo 'SFTP filesystem event notifications enabled.'
+fi
+
 set -- portable \
     --config-dir "$runtime_dir" \
     --directory "$runtime_dir" \
@@ -130,6 +153,6 @@ if [ -n "${SFTP_PUBLIC_KEY:-}" ]; then
     set -- "$@" --public-key "$SFTP_PUBLIC_KEY"
 fi
 
-unset SFTP_PASSWORD SFTP_SSH_HOST_KEY_BASE64
+unset SFTP_PASSWORD SFTP_SSH_HOST_KEY_BASE64 SFTP_EVENT_WEBHOOK_TOKEN
 echo "Starting SFTPGo for Cloud disk ${SFTP_CLOUD_DISK:-private} on 127.0.0.1:$sftp_port."
 exec "$sftpgo" "$@"

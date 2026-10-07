@@ -16,6 +16,8 @@ $variables = match ($argv[1] ?? null) {
         'SFTP_PORT',
         'SFTP_KEY_PREFIX',
         'SFTP_PUBLIC_KEY',
+        'SFTP_EVENT_WEBHOOK_URL',
+        'SFTP_EVENT_WEBHOOK_TOKEN',
     ],
     'tunnel' => [
         'NGROK_AUTHTOKEN',
