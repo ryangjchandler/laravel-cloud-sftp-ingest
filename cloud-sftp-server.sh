@@ -2,6 +2,11 @@
 set -eu
 
 # Run as one custom background process on an always-awake Cloud worker.
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+runtime_exports=$(php "$project_dir/cloud-sftp-env.php" server) || exit 1
+eval "$runtime_exports"
+unset runtime_exports
+
 for variable in LARAVEL_CLOUD_DISK_CONFIG SFTP_USERNAME SFTP_PASSWORD SFTP_SSH_HOST_KEY_BASE64; do
     case "$variable" in
         LARAVEL_CLOUD_DISK_CONFIG) value=${LARAVEL_CLOUD_DISK_CONFIG:-} ;;
@@ -16,7 +21,6 @@ for variable in LARAVEL_CLOUD_DISK_CONFIG SFTP_USERNAME SFTP_PASSWORD SFTP_SSH_H
 done
 unset value
 
-project_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 sftpgo="$project_dir/vendor/bin/sftpgo"
 if [ ! -x "$sftpgo" ]; then
     echo 'SFTPGo is missing. Run cloud-sftp-build.sh in the build command.' >&2
@@ -97,7 +101,10 @@ unset LARAVEL_CLOUD_DISK_CONFIG SFTP_RUNTIME_DIR
 password_file="$runtime_dir/password"
 host_key_file="$runtime_dir/ssh_host_ed25519_key"
 printf '%s' "$SFTP_PASSWORD" > "$password_file"
-printf '%s' "$SFTP_SSH_HOST_KEY_BASE64" | base64 -d > "$host_key_file"
+if ! printf '%s' "$SFTP_SSH_HOST_KEY_BASE64" | base64 -d > "$host_key_file"; then
+    echo 'SFTP_SSH_HOST_KEY_BASE64 is not valid base64.' >&2
+    exit 1
+fi
 
 export SFTPGO_SFTPD__HOST_KEYS="$host_key_file"
 export SFTPGO_SFTPD__BINDINGS__0__ADDRESS=127.0.0.1
@@ -124,4 +131,5 @@ if [ -n "${SFTP_PUBLIC_KEY:-}" ]; then
 fi
 
 unset SFTP_PASSWORD SFTP_SSH_HOST_KEY_BASE64
+echo "Starting SFTPGo for Cloud disk ${SFTP_CLOUD_DISK:-private} on 127.0.0.1:$sftp_port."
 exec "$sftpgo" "$@"

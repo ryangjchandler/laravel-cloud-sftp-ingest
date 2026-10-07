@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'sftp_browser' => [
+        'disk' => env('SFTP_CLOUD_DISK', 'private'),
+        'username' => env('SFTP_USERNAME'),
+        'password' => env('SFTP_PASSWORD'),
+    ],
+
 ];

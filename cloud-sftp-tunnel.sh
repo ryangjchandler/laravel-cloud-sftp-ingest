@@ -2,12 +2,16 @@
 set -eu
 
 # Run as a second custom background process on the same Cloud worker instance.
+project_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+runtime_exports=$(php "$project_dir/cloud-sftp-env.php" tunnel) || exit 1
+eval "$runtime_exports"
+unset runtime_exports
+
 if [ -z "${NGROK_AUTHTOKEN:-}" ]; then
     echo 'Missing runtime variable: NGROK_AUTHTOKEN' >&2
     exit 1
 fi
 
-project_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 ngrok="$project_dir/vendor/bin/ngrok"
 if [ ! -x "$ngrok" ]; then
     echo 'ngrok is missing. Run cloud-sftp-build.sh in the build command.' >&2
@@ -24,7 +28,9 @@ if [ "$sftp_port" -lt 1024 ] || [ "$sftp_port" -gt 65535 ]; then
 fi
 
 if [ -n "${NGROK_TCP_ADDRESS:-}" ]; then
+    echo "Starting ngrok TCP tunnel to 127.0.0.1:$sftp_port."
     exec "$ngrok" tcp "127.0.0.1:$sftp_port" --url "tcp://$NGROK_TCP_ADDRESS" --log stdout
 fi
 
+echo "Starting ngrok TCP tunnel to 127.0.0.1:$sftp_port."
 exec "$ngrok" tcp "127.0.0.1:$sftp_port" --log stdout
