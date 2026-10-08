@@ -1,58 +1,39 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# SFTP uploads on Laravel Cloud
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This app lets SFTP clients upload files to a Laravel Cloud object storage bucket. SFTPGo and ngrok run on a Worker cluster, while the App cluster serves the file browser and receives SFTP activity events.
 
-## About Laravel
+## Cloud setup
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+1. Attach a private object storage bucket as the `private` disk and attach a managed database to the environment. Cloud supplies the bucket configuration; no separate S3 credentials are needed.
+2. In the environment's **Build Commands**, add `sh cloud-sftp-build.sh` after Composer installation. This installs SFTPGo and ngrok for the deployed application.
+3. On the environment's infrastructure canvas, add a Worker cluster. Set its autoscaling to **None** (one instance) and configure it to **stay awake** when the App cluster scales to zero.
+4. In the Worker cluster's **Background processes**, add two **Custom** processes with one process each: `sh cloud-sftp-server.sh` and `sh cloud-sftp-tunnel.sh`. Both then run on the same instance.
+5. Add these variables in the environment's settings:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+   | Variable | Purpose |
+   | --- | --- |
+   | `SFTP_USERNAME`, `SFTP_PASSWORD` | SFTP login and `/files` browser login |
+   | `SFTP_SSH_HOST_KEY_BASE64` | Base64-encoded Ed25519 private host key |
+   | `NGROK_AUTHTOKEN` | Token from your ngrok account |
+   | `SFTP_EVENT_WEBHOOK_URL` | Public HTTPS app URL followed by `/api/sftp/events` |
+   | `SFTP_EVENT_WEBHOOK_TOKEN` | Random shared secret for event notifications |
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+   Generate the host key once with `ssh-keygen -t ed25519 -f sftp_host_key -N ''`, then set `SFTP_SSH_HOST_KEY_BASE64` to the output of `base64 < sftp_host_key | tr -d '\n'`. Keep the private key and all secret values out of the repository. The event URL and token are optional as a pair; set both to enable activity history.
 
-## Learning Laravel
+6. Set the environment's Deploy Commands to include `php artisan migrate --force`, then deploy. Redeploy after changing attached resources, variables, or cluster settings.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Connect and check uploads
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Find the public `tcp://host:port` address in the ngrok background process logs. In an SFTP client, use `host` as the server, `port` as the port, and the configured SFTP username and password. For example:
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```sh
+sftp -P <port> <username>@<host>
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Open `/files` on the application domain and sign in with the same username and password. The page lists files in the bucket and, when event notifications are enabled, the 30 most recent uploads, deletes, renames, and folder changes. The database keeps this history after files are deleted or workers restart.
 
-## Contributing
+`SFTP_PORT` defaults to `2222` for communication between SFTPGo and ngrok. `SFTP_CLOUD_DISK` defaults to `private`.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Stable connection address
 
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+For a fixed public host and port, reserve a TCP address on a paid [ngrok plan](https://ngrok.com/pricing) and set `NGROK_TCP_ADDRESS` to the assigned `host:port`. Alternatively, [Tailscale](https://tailscale.com/docs/features/tailscale-serve) provides a stable private address when each SFTP client joins the same tailnet; that option requires replacing the ngrok tunnel process. Tailscale Funnel is not a direct public SFTP replacement because [Funnel requires TLS](https://tailscale.com/docs/features/tailscale-funnel), while standard SFTP uses SSH.
